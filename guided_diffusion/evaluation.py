@@ -12,7 +12,7 @@ def plot_snapshot_images(model, diffusion, filename):
         diffusion.p_sample_loop
     )
     sample = sample_fn(model,
-            (cfg.batch_size, 3, cfg.img_sizes[0], cfg.img_sizes[0]),
+            (cfg.n_images, 3, cfg.img_sizes[0], cfg.img_sizes[0]),
             clip_denoised=True,
             model_kwargs={},
     )
