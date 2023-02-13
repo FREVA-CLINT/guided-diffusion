@@ -160,7 +160,7 @@ class TrainLoop:
             batch, cond = next(self.data)
             self.run_step(batch, cond)
             if self.step % cfg.save_snapshot_image_interval == 0:
-                plot_snapshot_images(self.model, self.diffusion, "iter_{}".format(self.step))
+                plot_snapshot_images(batch[0], self.model, self.diffusion, "iter_{}".format(self.step))
             if self.step % self.log_interval == 0:
                 logger.dumpkvs()
             if self.step % self.save_interval == 0:

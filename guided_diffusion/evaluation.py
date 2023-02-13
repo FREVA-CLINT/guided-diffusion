@@ -1,11 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from matplotlib import pyplot
 
 from guided_diffusion import config as cfg
 
 
-def plot_snapshot_images(model, diffusion, filename):
+def plot_snapshot_images(gt_image, model, diffusion, filename):
     model.eval()
 
     sample_fn = (
@@ -16,22 +17,25 @@ def plot_snapshot_images(model, diffusion, filename):
             clip_denoised=True,
             model_kwargs={},
     )
-    plot_images(sample, filename)
+    gt_image = gt_image.unsqueeze(0).repeat(cfg.n_images, 1, 1, 1)
+    plot_images(gt_image, sample, filename)
 
 
-def plot_images(images, filename):
+def plot_images(gt_images, images, filename):
     images = images.to(torch.device('cpu'))
 
-    fig, axes = plt.subplots(ncols=images.shape[0],
-                             figsize=(images.shape[0] * 2, 2))
+    fig, axes = plt.subplots(nrows=2, ncols=images.shape[0],
+                             figsize=(images.shape[0] * 2, 4))
 
     # plot and save data
     fig.patch.set_facecolor('black')
     for i in range(images.shape[0]):
         if images.shape[0] > 1:
-            axes[i].imshow(torch.movedim(images[i], 0, 2))
+            axes[0][i].imshow(images[i, 0], vmin=-1, vmax=1)
+            axes[1][i].imshow(gt_images[i, 0], vmin=-1, vmax=1)
         else:
-            axes.imshow(torch.movedim(images[i], 0, 2))
+            axes[0].imshow(images[i, 0], vmin=-1, vmax=1)
+            axes[1].imshow(gt_images[i, 0], vmin=-1, vmax=1)
     plt.savefig('{}/images/{}.jpg'.format(cfg.snapshot_dir, filename))
 
     plt.clf()
