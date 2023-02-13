@@ -3,7 +3,11 @@ Train a diffusion model on images.
 """
 
 import argparse
+import os
 
+from torch.utils.data import DataLoader
+
+from guided_diffusion.netcdfloader import FrevaNetCDFLoader, InfiniteSampler
 from guided_diffusion import dist_util, logger
 from guided_diffusion.image_datasets import load_data
 from guided_diffusion.resample import create_named_schedule_sampler
@@ -14,10 +18,17 @@ from guided_diffusion.script_util import (
     add_dict_to_argparser,
 )
 from guided_diffusion.train_util import TrainLoop
+from guided_diffusion import config as cfg
 
 
 def main():
     args = create_argparser().parse_args()
+
+    cfg.set_train_args(args.data_dir)
+    for subdir in ("", "/images", "/ckpt"):
+        outdir = cfg.snapshot_dir + subdir
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
 
     dist_util.setup_dist()
     logger.configure()
@@ -30,12 +41,23 @@ def main():
     schedule_sampler = create_named_schedule_sampler(args.schedule_sampler, diffusion)
 
     logger.log("creating data loader...")
-    data = load_data(
-        data_dir=args.data_dir,
-        batch_size=args.batch_size,
-        image_size=args.image_size,
-        class_cond=args.class_cond,
-    )
+
+    if cfg.test:
+        data = load_data(
+            data_dir=args.data_dir,
+            batch_size=args.batch_size,
+            image_size=args.image_size,
+            class_cond=args.class_cond,
+        )
+    else:
+        dataset = FrevaNetCDFLoader(project=cfg.freva_project, model=cfg.freva_model,
+                                    experiment=cfg.freva_experiment, time_frequency=cfg.freva_time_frequency,
+                                    data_types=cfg.data_types, gt_ensembles=cfg.gt_ensembles,
+                                    support_ensemble=cfg.support_ensemble,
+                                    split_timesteps=cfg.split_timesteps)
+        data = iter(DataLoader(dataset, batch_size=cfg.batch_size,
+                               sampler=InfiniteSampler(len(dataset)),
+                               num_workers=cfg.n_threads))
 
     logger.log("training...")
     TrainLoop(
@@ -68,7 +90,7 @@ def create_argparser():
         microbatch=-1,  # -1 disables microbatches
         ema_rate="0.9999",  # comma-separated list of EMA values
         log_interval=10,
-        save_interval=10000,
+        save_interval=1,
         resume_checkpoint="",
         use_fp16=False,
         fp16_scale_growth=1e-3,

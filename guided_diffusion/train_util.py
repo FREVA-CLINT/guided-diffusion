@@ -9,9 +9,11 @@ from torch.nn.parallel.distributed import DistributedDataParallel as DDP
 from torch.optim import AdamW
 
 from . import dist_util, logger
+from .evaluation import plot_snapshot_images
 from .fp16_util import MixedPrecisionTrainer
 from .nn import update_ema
 from .resample import LossAwareSampler, UniformSampler
+from guided_diffusion import config as cfg
 
 # For ImageNet experiments, this was a good default value.
 # We found that the lg_loss_scale quickly climbed to
@@ -157,6 +159,8 @@ class TrainLoop:
         ):
             batch, cond = next(self.data)
             self.run_step(batch, cond)
+            if self.step % cfg.save_snapshot_image_interval == 0:
+                plot_snapshot_images(self.model, self.diffusion, "iter_{}".format(self.step))
             if self.step % self.log_interval == 0:
                 logger.dumpkvs()
             if self.step % self.save_interval == 0:
@@ -273,7 +277,7 @@ def parse_resume_step_from_filename(filename):
 def get_blob_logdir():
     # You can change this to be a separate path to save checkpoints to
     # a blobstore or some external drive.
-    return logger.get_dir()
+    return "{}/ckpt/".format(cfg.snapshot_dir)
 
 
 def find_resume_checkpoint():
