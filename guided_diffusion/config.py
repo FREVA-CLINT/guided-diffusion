@@ -97,13 +97,13 @@ def set_common_args():
     arg_parser.add_argument('--custom-mean', type=float, default=2e-4, help="Custom mean for image normalization")
     arg_parser.add_argument('--custom-std', type=float, default=2e-4, help="Custom std for image normalization")
     arg_parser.add_argument('--seed-size', type=int, default=100, help="Name of the dataset for format checking")
-    arg_parser.add_argument('--n-layers', type=int, default=6, help="Number of layers")
-    arg_parser.add_argument('--n-dense-layers', type=int, default=1, help="Number of dense layers in discriminator")
-    arg_parser.add_argument('--gen-conv-factor', type=int, default=64,
+    arg_parser.add_argument('--n-residual-blocks', type=int, default=2, help="Number of layers")
+    arg_parser.add_argument('--diffusion-steps', type=int, default=1000, help="Number of layers")
+    arg_parser.add_argument('--conv-factors', type=int_list, default="1,2,3,4",
                             help="Factor of convolutions for increasing model complexity")
-    arg_parser.add_argument('--dis-conv-factor', type=int, default=64,
+    arg_parser.add_argument('--num-channels', type=int, default=128,
                             help="Factor of convolutions for increasing model complexity")
-    arg_parser.add_argument('--attention-res', type=int_list, default=[],
+    arg_parser.add_argument('--attention-res', type=int_list, default="16,8",
                             help="Resolutions of current tensors where attention layers should apply")
     arg_parser.add_argument('--gan-type', type=str, default="default",
                             help="default: use simple GAN architecture, "
@@ -146,12 +146,12 @@ def set_common_args():
 def set_train_args(arg_file=None):
     arg_parser = set_common_args()
     arg_parser.add_argument('--n-images', type=int, default=5, help="Number of images to generate for evaluation")
-    arg_parser.add_argument('--resume-iter', type=int, help="Iteration step from which the training will be resumed")
+    arg_parser.add_argument('--resume-iter', type=str, default="", help="Iteration step from which the training will be resumed")
     arg_parser.add_argument('--batch-size', type=int, default=18, help="Batch size")
     arg_parser.add_argument('--n-threads', type=int, default=64, help="Number of threads")
     arg_parser.add_argument('--multi-gpus', action='store_true', help="Use multiple GPUs, if any")
     arg_parser.add_argument('--lr', type=float, default=2e-4, help="Learning rate")
-    arg_parser.add_argument('--dropout', type=float, default=None, help="Learning rate")
+    arg_parser.add_argument('--dropout', type=float, default=0.0, help="Learning rate")
     arg_parser.add_argument('--max-iter', type=int, default=1000000, help="Maximum number of iterations")
     arg_parser.add_argument('--log-interval', type=int, default=None,
                             help="Iteration step interval at which a tensorboard summary log should be written")

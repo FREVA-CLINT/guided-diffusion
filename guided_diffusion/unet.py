@@ -835,7 +835,7 @@ class EncoderUNetModel(nn.Module):
                 normalization(ch),
                 nn.SiLU(),
                 AttentionPool2d(
-                    (image_size // ds), ch, num_head_channels, out_channels
+                    (image_size[0] // ds), ch, num_head_channels, out_channels
                 ),
             )
         elif pool == "spatial":

@@ -53,7 +53,7 @@ def model_and_diffusion_defaults():
         num_heads_upsample=-1,
         num_head_channels=-1,
         attention_resolutions="16,8",
-        channel_mult="",
+        channel_mult=[],
         dropout=0.0,
         class_cond=False,
         use_checkpoint=False,
@@ -132,7 +132,7 @@ def create_model(
     image_size,
     num_channels,
     num_res_blocks,
-    channel_mult="",
+    channel_mult=[],
     learn_sigma=False,
     class_cond=False,
     use_checkpoint=False,
@@ -146,23 +146,11 @@ def create_model(
     use_fp16=False,
     use_new_attention_order=False,
 ):
-    if channel_mult == "":
-        if image_size == 512:
-            channel_mult = (0.5, 1, 1, 2, 2, 4, 4)
-        elif image_size == 256:
-            channel_mult = (1, 1, 2, 2, 4, 4)
-        elif image_size == 128:
-            channel_mult = (1, 1, 2, 3, 4)
-        elif image_size == 64:
-            channel_mult = (1, 2, 3, 4)
-        else:
-            raise ValueError(f"unsupported image size: {image_size}")
-    else:
-        channel_mult = tuple(int(ch_mult) for ch_mult in channel_mult.split(","))
+    channel_mult = tuple(int(ch_mult) for ch_mult in channel_mult)
 
     attention_ds = []
-    for res in attention_resolutions.split(","):
-        attention_ds.append(image_size // int(res))
+    for res in attention_resolutions:
+        attention_ds.append(image_size[0] // int(res))
 
     in_out_channels = len(cfg.data_types)
     if cfg.split_timesteps and not cfg.lstm:
@@ -252,7 +240,7 @@ def create_classifier(
         raise ValueError(f"unsupported image size: {image_size}")
 
     attention_ds = []
-    for res in classifier_attention_resolutions.split(","):
+    for res in classifier_attention_resolutions:
         attention_ds.append(image_size // int(res))
 
     in_out_channels = len(cfg.data_types)
@@ -369,7 +357,7 @@ def sr_create_model(
         raise ValueError(f"unsupported large size: {large_size}")
 
     attention_ds = []
-    for res in attention_resolutions.split(","):
+    for res in attention_resolutions:
         attention_ds.append(large_size // int(res))
 
     return SuperResModel(

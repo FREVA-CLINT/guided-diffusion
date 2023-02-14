@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from matplotlib import pyplot
 
 from guided_diffusion import config as cfg
 
@@ -17,7 +16,7 @@ def plot_snapshot_images(gt_image, model, diffusion, filename):
         diffusion.p_sample_loop
     )
     output = sample_fn(model,
-            (cfg.n_images, in_out_channels, cfg.img_sizes[0], cfg.img_sizes[0]),
+            (cfg.n_images, in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
             clip_denoised=True,
             model_kwargs={},
     )
