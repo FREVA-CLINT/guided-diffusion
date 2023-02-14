@@ -4,6 +4,7 @@ import inspect
 from . import gaussian_diffusion as gd
 from .respace import SpacedDiffusion, space_timesteps
 from .unet import SuperResModel, UNetModel, EncoderUNetModel
+from . import config as cfg
 
 NUM_CLASSES = 1000
 
@@ -163,11 +164,15 @@ def create_model(
     for res in attention_resolutions.split(","):
         attention_ds.append(image_size // int(res))
 
+    in_out_channels = len(cfg.data_types)
+    if cfg.split_timesteps and not cfg.lstm:
+        in_out_channels *= cfg.split_timesteps
+
     return UNetModel(
         image_size=image_size,
-        in_channels=3,
+        in_channels=in_out_channels,
         model_channels=num_channels,
-        out_channels=(3 if not learn_sigma else 6),
+        out_channels=(in_out_channels if not learn_sigma else 2 * in_out_channels),
         num_res_blocks=num_res_blocks,
         attention_resolutions=tuple(attention_ds),
         dropout=dropout,
@@ -250,9 +255,13 @@ def create_classifier(
     for res in classifier_attention_resolutions.split(","):
         attention_ds.append(image_size // int(res))
 
+    in_out_channels = len(cfg.data_types)
+    if cfg.split_timesteps and not cfg.lstm:
+        in_out_channels *= cfg.split_timesteps
+
     return EncoderUNetModel(
         image_size=image_size,
-        in_channels=3,
+        in_channels=in_out_channels,
         model_channels=classifier_width,
         out_channels=1000,
         num_res_blocks=classifier_depth,

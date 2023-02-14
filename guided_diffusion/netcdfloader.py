@@ -144,7 +144,7 @@ class FrevaNetCDFLoader(Dataset):
         else:
             images = torch.cat(images).unsqueeze(0)
             support_images = torch.cat(support_images).unsqueeze(0)
-        return images.squeeze(0).repeat(3, 1, 1), {}  # , support_images
+        return images.squeeze(0), {}  # , support_images
 
     def __len__(self):
         return self.img_length
