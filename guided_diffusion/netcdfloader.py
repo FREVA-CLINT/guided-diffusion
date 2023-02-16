@@ -52,7 +52,6 @@ def nc_loadchecker(filename, data_type, keep_dss=False):
         # We use load_dataset instead of open_dataset because of lazy transpose
         ds = xr.load_dataset(filename, decode_times=True)
         if ('r0' in basename or 'r1' in basename) and 'i1850p3' in basename:
-            print(basename)
             ds[data_type].values = np.flip(ds[data_type].values, axis=1)
 
     except Exception:
