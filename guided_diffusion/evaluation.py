@@ -5,7 +5,7 @@ import torch
 from guided_diffusion import config as cfg
 
 
-def plot_snapshot_images(gt_image, model, diffusion, filename):
+def plot_snapshot_images(support_img, model, diffusion, filename):
     in_out_channels = len(cfg.data_types)
     if cfg.split_timesteps and not cfg.lstm:
         in_out_channels *= cfg.split_timesteps
@@ -15,17 +15,17 @@ def plot_snapshot_images(gt_image, model, diffusion, filename):
     sample_fn = (
         diffusion.p_sample_loop
     )
-    output = sample_fn(model,
+    output = sample_fn(model, support_img.repeat(cfg.n_images, 1, 1, 1).to(cfg.device),
             (cfg.n_images, in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
             clip_denoised=True,
             model_kwargs={},
     )
     output = output.unsqueeze(1)
-    gt_image = gt_image.unsqueeze(0)
+    support_img = support_img.unsqueeze(0)
     if not cfg.lstm:
         output = torch.transpose(output, 1, 2)
-        gt_image = torch.transpose(gt_image, 0, 1)
-    output = torch.cat([output.to(cfg.device), gt_image.unsqueeze(0).to(cfg.device)], dim=0)
+        support_img = torch.transpose(support_img, 0, 1)
+    output = torch.cat([output.to(cfg.device), support_img.to(cfg.device).unsqueeze(0)], dim=0)
     plot_images(output, filename)
 
 

@@ -14,6 +14,7 @@ from .fp16_util import MixedPrecisionTrainer
 from .nn import update_ema
 from .resample import LossAwareSampler, UniformSampler
 from guided_diffusion import config as cfg
+from tqdm import tqdm
 
 # For ImageNet experiments, this was a good default value.
 # We found that the lg_loss_scale quickly climbed to
@@ -40,6 +41,7 @@ class TrainLoop:
         schedule_sampler=None,
         weight_decay=0.0,
         lr_anneal_steps=0,
+        max_iter
     ):
         self.model = model
         self.diffusion = diffusion
@@ -63,6 +65,7 @@ class TrainLoop:
 
         self.step = 0
         self.resume_step = 0
+        self.max_steps = max_iter
         self.global_batch = self.batch_size * dist.get_world_size()
 
         self.sync_cuda = th.cuda.is_available()
@@ -153,17 +156,16 @@ class TrainLoop:
             self.opt.load_state_dict(state_dict)
 
     def run_loop(self):
-        while (
-            not self.lr_anneal_steps
-            or self.step + self.resume_step < self.lr_anneal_steps
-        ):
-            batch, cond = next(self.data)
-            self.run_step(batch, cond)
+        pbar = tqdm(range(self.resume_step, self.max_steps))
+
+        for i in pbar:
+            batch, support_batch, cond = next(self.data)
+            self.run_step(batch, support_batch, cond)
             if self.step % cfg.save_snapshot_image_interval == 0:
-                plot_snapshot_images(batch[0], self.model, self.diffusion, "iter_{}".format(self.step))
-            if self.step % self.log_interval == 0:
+                plot_snapshot_images(support_batch[0], self.model, self.diffusion, "iter_{}".format(self.step))
+            if self.step % self.log_interval == 0 and self.step > 0:
                 logger.dumpkvs()
-            if self.step % self.save_interval == 0:
+            if self.step % self.save_interval == 0 and self.step > 0:
                 self.save()
                 # Run for a finite amount of time in integration tests.
                 if os.environ.get("DIFFUSION_TRAINING_TEST", "") and self.step > 0:
@@ -173,18 +175,19 @@ class TrainLoop:
         if (self.step - 1) % self.save_interval != 0:
             self.save()
 
-    def run_step(self, batch, cond):
-        self.forward_backward(batch, cond)
+    def run_step(self, batch, support_batch, cond):
+        self.forward_backward(batch, support_batch, cond)
         took_step = self.mp_trainer.optimize(self.opt)
         if took_step:
             self._update_ema()
         self._anneal_lr()
         self.log_step()
 
-    def forward_backward(self, batch, cond):
+    def forward_backward(self, batch, support_batch, cond):
         self.mp_trainer.zero_grad()
         for i in range(0, batch.shape[0], self.microbatch):
             micro = batch[i : i + self.microbatch].to(dist_util.dev())
+            micro_support = support_batch[i : i + self.microbatch].to(dist_util.dev())
             micro_cond = {
                 k: v[i : i + self.microbatch].to(dist_util.dev())
                 for k, v in cond.items()
@@ -196,6 +199,7 @@ class TrainLoop:
                 self.diffusion.training_losses,
                 self.ddp_model,
                 micro,
+                micro_support,
                 t,
                 model_kwargs=micro_cond,
             )

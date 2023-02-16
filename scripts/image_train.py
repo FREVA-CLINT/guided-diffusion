@@ -87,6 +87,7 @@ def main(arg_file=None):
         schedule_sampler=schedule_sampler,
         weight_decay=0.0,
         lr_anneal_steps=0,
+        max_iter=cfg.max_iter
     ).run_loop()
 
 
