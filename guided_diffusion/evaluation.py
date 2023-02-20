@@ -6,6 +6,7 @@ from guided_diffusion import config as cfg
 
 
 def plot_snapshot_images(support_img, model, diffusion, filename):
+
     in_out_channels = len(cfg.data_types)
     if cfg.split_timesteps and not cfg.lstm:
         in_out_channels *= cfg.split_timesteps
@@ -15,17 +16,35 @@ def plot_snapshot_images(support_img, model, diffusion, filename):
     sample_fn = (
         diffusion.p_sample_loop
     )
-    output = sample_fn(model, support_img.repeat(cfg.n_images, 1, 1, 1).to(cfg.device),
-            (cfg.n_images, in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
-            clip_denoised=True,
-            model_kwargs={},
-    )
-    output = output.unsqueeze(1)
-    support_img = support_img.unsqueeze(0)
-    if not cfg.lstm:
-        output = torch.transpose(output, 1, 2)
-        support_img = torch.transpose(support_img, 0, 1)
-    output = torch.cat([output.to(cfg.device), support_img.to(cfg.device).unsqueeze(0)], dim=0)
+
+    if cfg.n_classes is None:
+        support_img = support_img[0]
+
+        output = sample_fn(model, support_img.repeat(cfg.n_images, 1, 1, 1).to(cfg.device),
+                (cfg.n_images, in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
+                clip_denoised=True,
+                model_kwargs={},
+        )
+        output = output.unsqueeze(1)
+        support_img = support_img.unsqueeze(0)
+        if not cfg.lstm:
+            output = torch.transpose(output, 1, 2)
+            support_img = torch.transpose(support_img, 0, 1)
+        output = torch.cat([output.to(cfg.device), support_img.to(cfg.device).unsqueeze(0)], dim=0)
+    else:
+        model_kwargs = {}
+        classes = torch.randint(
+            low=0, high=cfg.n_classes, size=(cfg.n_images,), device=cfg.device
+        )
+        model_kwargs["y"] = classes
+        output = sample_fn(model, None,
+                           (cfg.n_images, in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
+                           clip_denoised=True,
+                           model_kwargs=model_kwargs,
+                           )
+        output = output.unsqueeze(1).to(cfg.device)
+        if not cfg.lstm:
+            output = torch.transpose(output, 1, 2)
     plot_images(output, filename)
 
 
@@ -50,22 +69,13 @@ def plot_images(images, filename):
             for j in range(images.shape[1]):
                 if images.shape[0] > 1 and images.shape[1] > 1:
                     axes[i, j].axis("off")
-                    if cfg.test:
-                        axes[i, j].imshow(images[i])
-                    else:
-                        axes[i, j].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
+                    axes[i, j].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
                 elif images.shape[1] > 1:
                     axes[j].axis("off")
-                    if cfg.test:
-                        axes[j].imshow(images[j])
-                    else:
-                        axes[j].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
+                    axes[j].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
                 else:
                     axes[i].axis("off")
-                    if cfg.test:
-                        axes[i].imshow(images[i])
-                    else:
-                        axes[i].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
+                    axes[i].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
         plt.subplots_adjust(wspace=0.01, hspace=0.01, left=0, right=1, bottom=0, top=1)
         plt.savefig('{}/images/{}_{}.jpg'.format(cfg.snapshot_dir, filename, c), bbox_inches='tight')
 

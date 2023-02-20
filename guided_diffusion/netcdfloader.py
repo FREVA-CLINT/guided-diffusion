@@ -147,3 +147,81 @@ class FrevaNetCDFLoader(Dataset):
 
     def __len__(self):
         return self.img_length
+
+
+class EVANetCDFLoader(Dataset):
+    def __init__(self, data_root, data_in_names, data_in_types, ensembles, ssis, locations, norm_to_ssi=None):
+        super(EVANetCDFLoader, self).__init__()
+
+        self.data_in_names = data_in_names
+        self.locations = locations
+        self.ssis = ssis
+        self.n_ensembles = len(ensembles)
+        self.input, self.input_labels = [], []
+        self.input_ssis = []
+        self.input_ensembles = []
+
+        self.xr_dss = None
+
+        assert len(data_in_names) == len(data_in_types)
+
+        for i in range(len(data_in_names)):
+            data_in = []
+            for j in range(len(self.locations)):
+                for k in range(len(ssis)):
+                    for ensemble in ensembles:
+                        if ssis[k] == 0.0:
+                            times = ["1991", "1992", "1993", "1994"]
+                        else:
+                            times = ["1992"]
+                        if ssis[k] % 1 == 0:
+                            converted_ssi = int(ssis[k])
+                        else:
+                            converted_ssi = ssis[k]
+
+                        for time in times:
+                            if ssis[k] != 0.0:
+                                data_path = '{:s}/deva{}ssi{}{}_echam6_BOT_mm_{}_{}.nc'.format(data_root, converted_ssi, locations[j], ensemble, data_in_names[i], time)
+                            else:
+                                data_path = '{:s}/deva{}ssi{}_echam6_BOT_mm_{}_{}.nc'.format(data_root, converted_ssi, ensemble, data_in_names[i], time)
+
+                            if (ssis[k] != 0.0 and locations[j] != "ne") or (locations[j] == "ne" and ssis[k] == 0.0):
+                                if self.xr_dss is not None:
+                                    data, _ = load_netcdf([data_path], [data_in_types[i]])
+                                else:
+                                    self.xr_dss, data, _ = load_netcdf([data_path], [data_in_types[i]], keep_dss=True)
+
+                                if norm_to_ssi:
+                                    data = data * (norm_to_ssi / ssis[k])
+                                if cfg.mean_input:
+                                    data = np.expand_dims(np.mean(data, axis=0), axis=0)
+                                data_in.append(data[:][:cfg.img_sizes[0]][:cfg.img_sizes[1]])
+                                if i == 0:
+                                    self.input_labels.append(cfg.classes["{} {}".format(locations[j], ssis[k])])
+                                    self.input_ssis.append(ssis[k])
+                                    self.input_ensembles.append(ensemble)
+
+            self.input.append(data_in)
+
+        self.length = len(self.input_labels)
+
+        if cfg.normalization:
+            self.img_normalizer = DataNormalizer(self.input, cfg.normalization)
+
+    def __getitem__(self, index, raw_input=False):
+        input_data, input_labels = [], []
+
+        for i in range(len(self.data_in_names)):
+            data = torch.from_numpy(np.nan_to_num(self.input[i][index]))
+            if cfg.normalization and not raw_input:
+                data = self.img_normalizer.normalize(data, i)
+            input_data += data
+
+        input_data = torch.cat(input_data)
+
+        out_dict = {"y": np.array(self.input_labels[index], dtype=np.int64)}
+
+        return input_data, {}, out_dict
+
+    def __len__(self):
+        return self.length

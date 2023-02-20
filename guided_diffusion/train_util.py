@@ -162,7 +162,7 @@ class TrainLoop:
             batch, support_batch, cond = next(self.data)
             self.run_step(batch, support_batch, cond)
             if self.step % cfg.save_snapshot_image_interval == 0:
-                plot_snapshot_images(support_batch[0], self.model, self.diffusion, "iter_{}".format(self.step))
+                plot_snapshot_images(support_batch, self.model, self.diffusion, "iter_{}".format(self.step))
             if self.step % self.log_interval == 0 and self.step > 0:
                 logger.dumpkvs()
             if self.step % self.save_interval == 0 and self.step > 0:
@@ -187,7 +187,10 @@ class TrainLoop:
         self.mp_trainer.zero_grad()
         for i in range(0, batch.shape[0], self.microbatch):
             micro = batch[i : i + self.microbatch].to(dist_util.dev())
-            micro_support = support_batch[i : i + self.microbatch].to(dist_util.dev())
+            if not cfg.n_classes:
+                micro_support = support_batch[i : i + self.microbatch].to(dist_util.dev())
+            else:
+                micro_support = None
             micro_cond = {
                 k: v[i : i + self.microbatch].to(dist_util.dev())
                 for k, v in cond.items()

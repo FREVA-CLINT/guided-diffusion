@@ -67,6 +67,19 @@ def global_args(parser, arg_file=None, prog_func=None):
     for arg in args_dict:
         globals()[arg] = args_dict[arg]
 
+    global n_classes
+    global classes
+    if data_root_dir:
+        class_names = ["{} {}".format(location, ssi) for location in locations for ssi in train_ssis if
+                       (location == 'ne' and ssi == 0.0) or (location != 'ne' and ssi != 0.0)]
+        classes = {x: i for i, x in enumerate(sorted(set(class_names)))}
+        n_classes = len(classes.keys())
+    else:
+        n_classes = None
+        classes = None
+
+
+
     torch.backends.cudnn.benchmark = True
     globals()[device] = torch.device(device)
 
@@ -76,7 +89,7 @@ def global_args(parser, arg_file=None, prog_func=None):
 
 def set_common_args():
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('--data-root-dir', type=str, default='../data/',
+    arg_parser.add_argument('--data-root-dir', type=str, default=None,
                             help="Root directory containing the climate datasets")
     arg_parser.add_argument('--log-dir', type=str, default='logs/', help="Directory where the log files will be stored")
     arg_parser.add_argument('--img-names', type=str_list, default='train.nc',
@@ -85,10 +98,8 @@ def set_common_args():
                             help="Tuple of the size of the data (height x width)")
     arg_parser.add_argument('--data-types', type=str_list, default='tas', help="Comma separated list of variable types")
     arg_parser.add_argument('--device', type=str, default='cuda', help="Device used by PyTorch (cuda or cpu)")
-    arg_parser.add_argument('--weights', type=str, default=None, help="Initialization weight")
     arg_parser.add_argument('--random-seed', type=int, default=None,
                             help="Random seed for iteration loop and initialization weights")
-    arg_parser.add_argument('--progress-fwd', action='store_true', help="Print the progress of the forward propagation")
     arg_parser.add_argument('--normalization', type=str, default=None,
                             help="None: No normalization, "
                                  "std: normalize to 0 mean and 1 std, "
@@ -96,7 +107,6 @@ def set_common_args():
                                  "custom: normalize with custom define mean and std values")
     arg_parser.add_argument('--custom-mean', type=float, default=2e-4, help="Custom mean for image normalization")
     arg_parser.add_argument('--custom-std', type=float, default=2e-4, help="Custom std for image normalization")
-    arg_parser.add_argument('--seed-size', type=int, default=100, help="Name of the dataset for format checking")
     arg_parser.add_argument('--n-residual-blocks', type=int, default=2, help="Number of layers")
     arg_parser.add_argument('--diffusion-steps', type=int, default=1000, help="Number of layers")
     arg_parser.add_argument('--conv-factors', type=int_list, default="1,2,3,4",
@@ -105,42 +115,25 @@ def set_common_args():
                             help="Factor of convolutions for increasing model complexity")
     arg_parser.add_argument('--attention-res', type=int_list, default="16,8",
                             help="Resolutions of current tensors where attention layers should apply")
-    arg_parser.add_argument('--gan-type', type=str, default="default",
-                            help="default: use simple GAN architecture, "
-                                 "sa-gan: use Self-Attention GAN architecture, "
-                                 "big-gan: use Big-GAN architecture")
     arg_parser.add_argument('--freva-project', type=str, default=None, help="Read data via freva project")
     arg_parser.add_argument('--freva-model', type=str, default=None, help="Read data via freva model")
     arg_parser.add_argument('--freva-experiment', type=str, default=None, help="Read data via freva experiment")
     arg_parser.add_argument('--freva-time-frequency', type=str, default=None, help="Read data via freva time-frequency")
-
-    arg_parser.add_argument('--n-classes', type=int_list, default=None,
+    arg_parser.add_argument('-v', '--vlim', type=int_list, default=None,
                             help="Comma separated list of integers defining the number of classes of different labels")
-    arg_parser.add_argument('--vlim', type=int_list, default=None,
-                            help="Comma separated list of integers defining the number of classes of different labels")
-    arg_parser.add_argument('--class-dim', type=int, default=16, help="Number of channels for each conditioned label")
-
-    arg_parser.add_argument('--locations', type=str_list, default=None,
-                            help="Comma separated list of classes for location prediction")
     arg_parser.add_argument('--gt-ensembles', type=str_list, default=None,
                             help="Comma separated list of classes for location prediction")
     arg_parser.add_argument('--train-ssis', type=float_list, default=None,
                             help="Comma separated list of ssi values that are used for training")
-    arg_parser.add_argument('--train-ensembles', type=interv_list, default=None,
-                            help="Comma separated list of ensembles that are used for training")
-    arg_parser.add_argument('--data-time-range', type=interv_list, default="0,2",
-                            help="Comma separated list of ensembles that are used for training")
-    arg_parser.add_argument('--skip-layers', action='store_true', help="Use multiple GPUs, if any")
-    arg_parser.add_argument('--spectral-norm', action='store_true', help="Use multiple GPUs, if any")
-    arg_parser.add_argument('--disable-first-bn', action='store_true', help="Use multiple GPUs, if any")
-    arg_parser.add_argument('--lstm', action='store_true', help="Use multiple GPUs, if any")
     arg_parser.add_argument('--split-timesteps', type=int, default=1, help="Number of channels for each conditioned label")
     arg_parser.add_argument('--snapshot-dir', type=str, default='snapshots/',
                             help="Parent directory of the training checkpoints and the snapshot images")
     arg_parser.add_argument('-f', '--load-from-file', type=str, action=LoadFromFile,
                             help="Load all the arguments from a text file")
-    arg_parser.add_argument('--test', action='store_true', help="Use image test data set for training")
-    arg_parser.add_argument('--mini-batch-discr-dim', type=int, default=None, help="Use image test data set for training")
+    arg_parser.add_argument('--lstm', action='store_true', help="Use multiple GPUs, if any")
+    arg_parser.add_argument('--locations', type=str_list, default=',nh,sh,ne',
+                            help="Comma separated list of classes for location prediction")
+    arg_parser.add_argument('--mean-input', action='store_true', help="Use a custom padding for global dataset")
 
     return arg_parser
 
@@ -157,17 +150,13 @@ def set_train_args(arg_file=None):
     arg_parser.add_argument('--max-iter', type=int, default=1000000, help="Maximum number of iterations")
     arg_parser.add_argument('--log-interval', type=int, default=None,
                             help="Iteration step interval at which a tensorboard summary log should be written")
-    arg_parser.add_argument('--lr-scheduler-patience', type=int, default=None, help="Patience for the lr scheduler")
     arg_parser.add_argument('--save-model-interval', type=int, default=50000,
                             help="Iteration step interval at which the model should be saved")
     arg_parser.add_argument('--save-snapshot-image-interval', type=int, default=None,
                             help="Iteration step interval at which a tensorboard summary log should be written")
-    arg_parser.add_argument('--loss', type=str, default="bce",
-                            help="bce: binary-cross-entropy loss, "
-                                 "hinge: hinge loss, "
-                                 "wasserstein: wasserstein loss")
     arg_parser.add_argument('--support-ensemble', type=str, default=None, help="Read data via freva time-frequency")
-
+    arg_parser.add_argument('--train-ensembles', type=interv_list, default='101',
+                            help="Comma separated list of ensembles that are used for training")
     global_args(arg_parser, arg_file)
 
 

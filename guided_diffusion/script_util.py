@@ -6,8 +6,6 @@ from .respace import SpacedDiffusion, space_timesteps
 from .unet import SuperResModel, UNetModel, EncoderUNetModel
 from . import config as cfg
 
-NUM_CLASSES = 1000
-
 
 def diffusion_defaults():
     """
@@ -134,7 +132,6 @@ def create_model(
     num_res_blocks,
     channel_mult=[],
     learn_sigma=False,
-    class_cond=False,
     use_checkpoint=False,
     attention_resolutions="16",
     num_heads=1,
@@ -153,19 +150,22 @@ def create_model(
         attention_ds.append(image_size[0] // int(res))
 
     in_out_channels = len(cfg.data_types)
-    if cfg.split_timesteps and not cfg.lstm:
-        in_out_channels *= cfg.split_timesteps
+    in_out_channels *= cfg.split_timesteps
+    if cfg.n_classes:
+        in_channels = in_out_channels
+    else:
+        in_channels = 2 * in_out_channels
 
     return UNetModel(
         image_size=image_size,
-        in_channels=2 * in_out_channels,
+        in_channels=in_channels,
         model_channels=num_channels,
         out_channels=(in_out_channels if not learn_sigma else 2 * in_out_channels),
         num_res_blocks=num_res_blocks,
         attention_resolutions=tuple(attention_ds),
         dropout=dropout,
         channel_mult=channel_mult,
-        num_classes=(NUM_CLASSES if class_cond else None),
+        num_classes=cfg.n_classes,
         use_checkpoint=use_checkpoint,
         use_fp16=use_fp16,
         num_heads=num_heads,
