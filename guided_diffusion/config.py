@@ -116,6 +116,8 @@ def set_common_args():
 
     arg_parser.add_argument('--n-classes', type=int_list, default=None,
                             help="Comma separated list of integers defining the number of classes of different labels")
+    arg_parser.add_argument('--vlim', type=int_list, default=None,
+                            help="Comma separated list of integers defining the number of classes of different labels")
     arg_parser.add_argument('--class-dim', type=int, default=16, help="Number of channels for each conditioned label")
 
     arg_parser.add_argument('--locations', type=str_list, default=None,

@@ -37,8 +37,12 @@ def plot_images(images, filename):
     # plot and save data
     fig.patch.set_facecolor('black')
     for c in range(images.shape[2]):
-        vmin = -1
-        vmax = 1
+        if cfg.vlim:
+            vmin = cfg.vlim[0]
+            vmax = cfg.vlim[1]
+        else:
+            vmin = torch.min(images)
+            vmax = torch.max(images)
 
         # plot and save data
         fig.patch.set_facecolor('black')
