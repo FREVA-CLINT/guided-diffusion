@@ -93,7 +93,7 @@ def main(arg_file=None):
                                                      for ssi in cfg.sample_ssis
                                                      if (location == 'ne' and ssi == 0.0) or (
                                                              location != 'ne' and ssi != 0.0)])
-            model_kwargs["y"] = classes
+            model_kwargs["y"] = classes.to(cfg.device)
             samples = sample_fn(
                 model, None,
                 (len(classes), in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
