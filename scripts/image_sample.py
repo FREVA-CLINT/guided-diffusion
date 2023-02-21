@@ -7,101 +7,149 @@ import argparse
 import os
 
 import numpy as np
-import torch as th
+import torch
 import torch.distributed as dist
+import xarray as xr
 
+from guided_diffusion import config as cfg
 from guided_diffusion import dist_util, logger
+from guided_diffusion.netcdfloader import EVANetCDFLoader, FrevaNetCDFLoader
 from guided_diffusion.script_util import (
-    NUM_CLASSES,
     model_and_diffusion_defaults,
-    create_model_and_diffusion,
+    create_model,
     add_dict_to_argparser,
-    args_to_dict,
+    create_gaussian_diffusion,
 )
 
 
-def main():
-    args = create_argparser().parse_args()
+def main(arg_file=None):
+    cfg.set_evaluate_args(arg_file)
+    if not os.path.exists(cfg.eval_dir):
+        os.makedirs(cfg.eval_dir)
 
     dist_util.setup_dist()
     logger.configure()
 
     logger.log("creating model and diffusion...")
-    model, diffusion = create_model_and_diffusion(
-        **args_to_dict(args, model_and_diffusion_defaults().keys())
+    model = create_model(
+        image_size=cfg.img_sizes,
+        num_channels=cfg.num_channels,
+        num_res_blocks=cfg.n_residual_blocks,
+        channel_mult=cfg.conv_factors,
+        learn_sigma=False,
+        use_checkpoint=False,
+        attention_resolutions=cfg.attention_res,
+        num_heads=1,
+        num_head_channels=-1,
+        num_heads_upsample=-1,
+        use_scale_shift_norm=False,
+        dropout=cfg.dropout,
+        resblock_updown=False,
+        use_fp16=False,
+        use_new_attention_order=False,
     )
+    diffusion = create_gaussian_diffusion(
+        steps=cfg.diffusion_steps,
+        learn_sigma=False,
+        noise_schedule="linear",
+        use_kl=False,
+        predict_xstart=False,
+        rescale_timesteps=False,
+        rescale_learned_sigmas=False,
+        timestep_respacing=False,
+    )
+
     model.load_state_dict(
-        dist_util.load_state_dict(args.model_path, map_location="cpu")
+        dist_util.load_state_dict("{}/ckpt/{}".format(cfg.snapshot_dir, cfg.model_name), map_location="cpu")
     )
     model.to(dist_util.dev())
-    if args.use_fp16:
-        model.convert_to_fp16()
     model.eval()
 
+    if cfg.data_root_dir:
+        dataset = EVANetCDFLoader(data_root=cfg.data_root_dir, data_in_names=cfg.img_names,
+                                  data_in_types=cfg.data_types, ensembles=cfg.train_ensembles, ssis=cfg.train_ssis,
+                                  locations=cfg.locations)
+    else:
+        dataset = FrevaNetCDFLoader(project=cfg.freva_project, model=cfg.freva_model,
+                                    experiment=cfg.freva_experiment, time_frequency=cfg.freva_time_frequency,
+                                    data_types=cfg.data_types, gt_ensembles=cfg.gt_ensembles,
+                                    support_ensemble=cfg.val_ensemble,
+                                    split_timesteps=cfg.split_timesteps)
+
     logger.log("sampling...")
-    all_images = []
-    all_labels = []
-    while len(all_images) * args.batch_size < args.num_samples:
-        model_kwargs = {}
-        if args.class_cond:
-            classes = th.randint(
-                low=0, high=NUM_CLASSES, size=(args.batch_size,), device=dist_util.dev()
-            )
-            model_kwargs["y"] = classes
+
+    in_out_channels = len(cfg.data_types)
+    if cfg.split_timesteps and not cfg.lstm:
+        in_out_channels *= cfg.split_timesteps
+    all_samples = []
+    all_sample_names = []
+    while len(all_samples) * cfg.batch_size < len(cfg.sample_names):
         sample_fn = (
-            diffusion.p_sample_loop if not args.use_ddim else diffusion.ddim_sample_loop
+            diffusion.p_sample_loop
         )
-        sample = sample_fn(
-            model,
-            (args.batch_size, 3, args.image_size, args.image_size),
-            clip_denoised=args.clip_denoised,
-            model_kwargs=model_kwargs,
-        )
-        sample = ((sample + 1) * 127.5).clamp(0, 255).to(th.uint8)
-        sample = sample.permute(0, 2, 3, 1)
-        sample = sample.contiguous()
-
-        gathered_samples = [th.zeros_like(sample) for _ in range(dist.get_world_size())]
-        dist.all_gather(gathered_samples, sample)  # gather not supported with NCCL
-        all_images.extend([sample.cpu().numpy() for sample in gathered_samples])
-        if args.class_cond:
-            gathered_labels = [
-                th.zeros_like(classes) for _ in range(dist.get_world_size())
-            ]
-            dist.all_gather(gathered_labels, classes)
-            all_labels.extend([labels.cpu().numpy() for labels in gathered_labels])
-        logger.log(f"created {len(all_images) * args.batch_size} samples")
-
-    arr = np.concatenate(all_images, axis=0)
-    arr = arr[: args.num_samples]
-    if args.class_cond:
-        label_arr = np.concatenate(all_labels, axis=0)
-        label_arr = label_arr[: args.num_samples]
-    if dist.get_rank() == 0:
-        shape_str = "x".join([str(x) for x in arr.shape])
-        out_path = os.path.join(logger.get_dir(), f"samples_{shape_str}.npz")
-        logger.log(f"saving to {out_path}")
-        if args.class_cond:
-            np.savez(out_path, arr, label_arr)
+        model_kwargs = {}
+        if cfg.n_classes:
+            classes = torch.tensor(cfg.batch_size * [cfg.classes[(location, ssi)] for location in cfg.sample_locations
+                                                     for ssi in cfg.sample_ssis
+                                                     if (location == 'ne' and ssi == 0.0) or (
+                                                             location != 'ne' and ssi != 0.0)])
+            model_kwargs["y"] = classes
+            samples = sample_fn(
+                model, None,
+                (len(classes), in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
+                clip_denoised=True,
+                model_kwargs=model_kwargs,
+            )
+            sample_classes = [(location, int(ssi) if ssi % 2 == 0 else ssi)
+                              for location in cfg.sample_locations for ssi in cfg.sample_ssis
+                              if (location == 'ne' and ssi == 0.0) or (
+                                      location != 'ne' and ssi != 0.0)]
+            sample_names = []
+            for ensemble in cfg.sample_names[len(all_samples)*cfg.batch_size:len(all_samples)*cfg.batch_size+cfg.batch_size]:
+                sample_names += ['deva{}ssi{}{}_echam6_BOT_mm_'.format(sample_class[0], sample_class[1], ensemble) for sample_class in sample_classes]
+            all_sample_names.append(sample_names)
+            all_samples.append(samples)
         else:
-            np.savez(out_path, arr)
+            support_image = [dataset.__getitem__(ensemble=cfg.val_ensemble, timechunk=t)[1].to(cfg.device) for t in
+                             cfg.sample_time_chunks]
+            support_image = torch.stack(support_image)
+
+            samples = sample_fn(
+                model, support_image,
+                (cfg.batch_size, in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
+                clip_denoised=True,
+                model_kwargs={},
+            )
+            all_samples.append(samples)
+
+    for i in range(len(all_samples)):
+        for j in range(len(all_samples[i])):
+            sample = torch.stack(torch.split(all_samples[i][j], cfg.split_timesteps, dim=0), dim=0)
+            create_outputs(sample, dataset, all_sample_names[i][j], dataset.xr_dss)
 
     dist.barrier()
     logger.log("sampling complete")
 
 
-def create_argparser():
-    defaults = dict(
-        clip_denoised=True,
-        num_samples=10000,
-        batch_size=16,
-        use_ddim=False,
-        model_path="",
-    )
-    defaults.update(model_and_diffusion_defaults())
-    parser = argparse.ArgumentParser()
-    add_dict_to_argparser(parser, defaults)
-    return parser
+def create_outputs(sample, data_set, file_name, xr_dss):
+    for v in range(len(cfg.data_types)):
+        data_type = cfg.data_types[v]
+
+        ds = xr_dss[1].copy()
+
+        if cfg.normalization:
+            sample[v, :, :, :] = data_set.img_normalizer.renormalize(sample[v, :, :, :], v)
+
+        ds[data_type] = xr.DataArray(sample.to(torch.device('cpu')).detach().numpy()[v, :, :, :],
+                                     dims=xr_dss[1].coords.dims, coords=xr_dss[1].coords)
+        ds["time"] = xr_dss[0]["time"].values
+
+        for var in xr_dss[0].keys():
+            ds[var] = xr_dss[0][var]
+
+        ds.attrs["history"] = "Infilled using CRAI (Climate Reconstruction AI: " \
+                              "https://github.com/FREVA-CLINT/climatereconstructionAI)\n" + ds.attrs["history"]
+        ds.to_netcdf('{}/{}{}_1992.nc'.format(cfg.eval_dir, file_name, data_type))
 
 
 if __name__ == "__main__":

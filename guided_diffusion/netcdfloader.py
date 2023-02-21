@@ -98,13 +98,18 @@ class FrevaNetCDFLoader(Dataset):
         self.time_chunks = 0
         self.img_data, self.support_data = [], []
 
+        self.xr_dss = None
+
         for type in data_types:
             ensemble_data = []
             for ensemble in gt_ensembles + [support_ensemble]:
                 paths = load_paths(project=project, model=model, experiment=experiment, time_frequency=time_frequency,
                                    variable=type, ensemble=ensemble)
                 paths = list(paths)
-                data, _ = load_netcdf(paths, len(paths) * [type])
+                if ensemble == support_ensemble and self.xr_dss is None:
+                    self.xr_dss, data, _ = load_netcdf(paths, len(paths) * [type], keep_dss=True)
+                else:
+                    data, _ = load_netcdf(paths, len(paths) * [type])
                 data = np.concatenate(data)[:, :cfg.img_sizes[0], :cfg.img_sizes[1]]
                 data = np.split(data, len(data) // split_timesteps)
                 self.time_chunks = len(data)
@@ -197,7 +202,7 @@ class EVANetCDFLoader(Dataset):
                                     data = np.expand_dims(np.mean(data, axis=0), axis=0)
                                 data_in.append(data[:][:cfg.img_sizes[0]][:cfg.img_sizes[1]])
                                 if i == 0:
-                                    self.input_labels.append(cfg.classes["{} {}".format(locations[j], ssis[k])])
+                                    self.input_labels.append(cfg.classes[(locations[j], ssis[k])])
                                     self.input_ssis.append(ssis[k])
                                     self.input_ensembles.append(ensemble)
 

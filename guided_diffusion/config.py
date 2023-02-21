@@ -70,15 +70,14 @@ def global_args(parser, arg_file=None, prog_func=None):
     global n_classes
     global classes
     if data_root_dir:
-        class_names = ["{} {}".format(location, ssi) for location in locations for ssi in train_ssis if
+        class_keys = [(location, ssi) for location in locations for ssi in train_ssis if
                        (location == 'ne' and ssi == 0.0) or (location != 'ne' and ssi != 0.0)]
-        classes = {x: i for i, x in enumerate(sorted(set(class_names)))}
+        classes = {x: i for i, x in enumerate(sorted(set(class_keys)))}
         n_classes = len(classes.keys())
+        print(classes)
     else:
         n_classes = None
         classes = None
-
-
 
     torch.backends.cudnn.benchmark = True
     globals()[device] = torch.device(device)
@@ -134,19 +133,20 @@ def set_common_args():
     arg_parser.add_argument('--locations', type=str_list, default=',nh,sh,ne',
                             help="Comma separated list of classes for location prediction")
     arg_parser.add_argument('--mean-input', action='store_true', help="Use a custom padding for global dataset")
-
+    arg_parser.add_argument('--batch-size', type=int, default=18, help="Batch size")
+    arg_parser.add_argument('--train-ensembles', type=interv_list, default='101',
+                            help="Comma separated list of ensembles that are used for training")
+    arg_parser.add_argument('--dropout', type=float, default=0.0, help="Learning rate")
     return arg_parser
 
 
 def set_train_args(arg_file=None):
     arg_parser = set_common_args()
     arg_parser.add_argument('--n-images', type=int, default=5, help="Number of images to generate for evaluation")
-    arg_parser.add_argument('--resume-iter', type=str, default="", help="Iteration step from which the training will be resumed")
-    arg_parser.add_argument('--batch-size', type=int, default=18, help="Batch size")
+    arg_parser.add_argument('--resume-iter', type=int, default=0, help="Iteration step from which the training will be resumed")
     arg_parser.add_argument('--n-threads', type=int, default=64, help="Number of threads")
     arg_parser.add_argument('--multi-gpus', action='store_true', help="Use multiple GPUs, if any")
     arg_parser.add_argument('--lr', type=float, default=2e-4, help="Learning rate")
-    arg_parser.add_argument('--dropout', type=float, default=0.0, help="Learning rate")
     arg_parser.add_argument('--max-iter', type=int, default=1000000, help="Maximum number of iterations")
     arg_parser.add_argument('--log-interval', type=int, default=None,
                             help="Iteration step interval at which a tensorboard summary log should be written")
@@ -155,8 +155,6 @@ def set_train_args(arg_file=None):
     arg_parser.add_argument('--save-snapshot-image-interval', type=int, default=None,
                             help="Iteration step interval at which a tensorboard summary log should be written")
     arg_parser.add_argument('--support-ensemble', type=str, default=None, help="Read data via freva time-frequency")
-    arg_parser.add_argument('--train-ensembles', type=interv_list, default='101',
-                            help="Comma separated list of ensembles that are used for training")
     global_args(arg_parser, arg_file)
 
 
@@ -164,13 +162,16 @@ def set_evaluate_args(arg_file=None, prog_func=None):
     arg_parser = set_common_args()
     arg_parser.add_argument('--eval-dir', type=str, default='evaluations/',
                             help="Parent directory of the training checkpoints and the snapshot images")
-    arg_parser.add_argument('--model-names', type=str_list, default=None,
-                            help="Comma separated list of classes for location prediction")
-    arg_parser.add_argument('--eval-names', type=str_list, default=None,
+    arg_parser.add_argument('--model-name', type=str, default=None,
                             help="Comma separated list of classes for location prediction")
     arg_parser.add_argument('--val-ensemble', type=str, default=None, help="Read data via freva time-frequency")
-    arg_parser.add_argument('--eval-timechunks', type=int_list, default='1,2',
-                            help="Tuple of the size of the data (height x width)")
-    arg_parser.add_argument('--generate-ensembles', type=int, default=10,
-                            help="Iteration step interval at which the model should be saved")
+    arg_parser.add_argument('--sample-locations', type=str_list, default=',nh,sh,ne',
+                            help="Comma separated list of classes for location prediction")
+    arg_parser.add_argument('--sample-ssis', type=float_list, default=None,
+                            help="Comma separated list of classes for location prediction")
+    arg_parser.add_argument('--sample-names', type=interv_list, default=None,
+                            help="Comma separated list of classes for location prediction")
+    arg_parser.add_argument('--sample-time-chunks', type=interv_list, default=None,
+                            help="Comma separated list of classes for location prediction")
+
     global_args(arg_parser, arg_file, prog_func)

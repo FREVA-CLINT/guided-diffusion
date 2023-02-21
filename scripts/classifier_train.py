@@ -42,15 +42,15 @@ def main():
         )
 
     resume_step = 0
-    if args.resume_checkpoint:
-        resume_step = parse_resume_step_from_filename(args.resume_checkpoint)
+    if args.resume_iter:
+        resume_step = parse_resume_step_from_filename(args.resume_iter)
         if dist.get_rank() == 0:
             logger.log(
-                f"loading model from checkpoint: {args.resume_checkpoint}... at {resume_step} step"
+                f"loading model from checkpoint: {args.resume_iter}... at {resume_step} step"
             )
             model.load_state_dict(
                 dist_util.load_state_dict(
-                    args.resume_checkpoint, map_location=dist_util.dev()
+                    args.resume_iter, map_location=dist_util.dev()
                 )
             )
 
@@ -90,9 +90,9 @@ def main():
 
     logger.log(f"creating optimizer...")
     opt = AdamW(mp_trainer.master_params, lr=args.lr, weight_decay=args.weight_decay)
-    if args.resume_checkpoint:
+    if args.resume_iter:
         opt_checkpoint = bf.join(
-            bf.dirname(args.resume_checkpoint), f"opt{resume_step:06}.pt"
+            bf.dirname(args.resume_iter), f"opt{resume_step:06}.pt"
         )
         logger.log(f"loading optimizer state from checkpoint: {opt_checkpoint}")
         opt.load_state_dict(
