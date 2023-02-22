@@ -200,7 +200,7 @@ class EVANetCDFLoader(Dataset):
                                     data = data * (norm_to_ssi / ssis[k])
                                 if cfg.mean_input:
                                     data = np.expand_dims(np.mean(data, axis=0), axis=0)
-                                data_in.append(data[:][:cfg.img_sizes[0]][:cfg.img_sizes[1]])
+                                data_in.append(data)
                                 if i == 0:
                                     self.input_labels.append(cfg.classes[(locations[j], ssis[k])])
                                     self.input_ssis.append(ssis[k])
@@ -225,8 +225,7 @@ class EVANetCDFLoader(Dataset):
         input_data = torch.cat(input_data)
 
         out_dict = {"y": np.array(self.input_labels[index], dtype=np.int64)}
-
-        return input_data, {}, out_dict
+        return input_data[:, :cfg.img_sizes[0], :cfg.img_sizes[1]], {}, out_dict
 
     def __len__(self):
         return self.length

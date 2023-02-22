@@ -138,14 +138,11 @@ class TrainLoop:
             batch, support_batch, cond = next(self.data)
             self.run_step(batch, support_batch, cond)
             if cfg.save_snapshot_image_interval and self.step % cfg.save_snapshot_image_interval == 0:
-                plot_snapshot_images(support_batch, self.model, self.diffusion, "iter_{}".format(self.step))
+                plot_snapshot_images(batch[0], self.model, self.diffusion, "iter_{}".format(self.step + self.resume_iter), cond)
             if self.log_interval and self.step % self.log_interval == 0 and self.step > 0:
                 logger.dumpkvs()
             if self.step % self.save_model_interval == 0 and self.step > 0:
                 self.save()
-                # Run for a finite amount of time in integration tests.
-                if os.environ.get("DIFFUSION_TRAINING_TEST", "") and self.step > 0:
-                    return
             self.step += 1
         # Save the last checkpoint if it wasn't already saved.
         if (self.step - 1) % self.save_model_interval != 0:

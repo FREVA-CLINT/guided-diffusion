@@ -5,7 +5,7 @@ import torch
 from guided_diffusion import config as cfg
 
 
-def plot_snapshot_images(support_img, model, diffusion, filename):
+def plot_snapshot_images(gt_img, model, diffusion, filename, cond):
 
     in_out_channels = len(cfg.data_types)
     if cfg.split_timesteps and not cfg.lstm:
@@ -18,19 +18,12 @@ def plot_snapshot_images(support_img, model, diffusion, filename):
     )
 
     if cfg.n_classes is None:
-        support_img = support_img[0]
-
-        output = sample_fn(model, support_img.repeat(cfg.n_images, 1, 1, 1).to(cfg.device),
-                (cfg.n_images, in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
-                clip_denoised=True,
-                model_kwargs={},
-        )
-        output = output.unsqueeze(1)
-        support_img = support_img.unsqueeze(0)
-        if not cfg.lstm:
-            output = torch.transpose(output, 1, 2)
-            support_img = torch.transpose(support_img, 0, 1)
-        output = torch.cat([output.to(cfg.device), support_img.to(cfg.device).unsqueeze(0)], dim=0)
+        output = sample_fn(model, gt_img.repeat(cfg.n_images, 1, 1, 1).to(cfg.device),
+                           (cfg.n_images, in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
+                           clip_denoised=True,
+                           model_kwargs={},
+                           )
+        plot_names = (cfg.n_images + 1) * [""]
     else:
         model_kwargs = {}
         classes = torch.randint(
@@ -42,13 +35,18 @@ def plot_snapshot_images(support_img, model, diffusion, filename):
                            clip_denoised=True,
                            model_kwargs=model_kwargs,
                            )
-        output = output.unsqueeze(1).to(cfg.device)
-        if not cfg.lstm:
-            output = torch.transpose(output, 1, 2)
-    plot_images(output, filename)
+        classes = torch.cat([classes, torch.tensor([cond["y"][0]])])
+        plot_names = ["{} ssi{}".format(get_class_from_name([k for k, v in cfg.classes.items() if c == v][0][0]), [k for k, v in cfg.classes.items() if c == v][0][1]) for c in classes]
+    output = output.unsqueeze(1).to(cfg.device)
+    gt_img = gt_img.unsqueeze(0)
+    if not cfg.lstm:
+        output = torch.transpose(output, 1, 2)
+        gt_img = torch.transpose(gt_img, 0, 1)
+    output = torch.cat([output.to(cfg.device), gt_img.to(cfg.device).unsqueeze(0)], dim=0)
+    plot_images(output, filename, plot_names)
 
 
-def plot_images(images, filename):
+def plot_images(images, filename, plot_names):
     images = images.to(torch.device('cpu'))
     fig, axes = plt.subplots(nrows=images.shape[0], ncols=images.shape[1],
                              figsize=(images.shape[4] / 50 * images.shape[1], images.shape[3] * images.shape[0] / 50))
@@ -68,12 +66,21 @@ def plot_images(images, filename):
         for i in range(images.shape[0]):
             for j in range(images.shape[1]):
                 if images.shape[0] > 1 and images.shape[1] > 1:
+                    if plot_names[i]:
+                        axes[i, 0].text(-1, 0.5, plot_names[i],
+                                size=24, va="center", transform=axes[i, 0].transAxes, color="white")
                     axes[i, j].axis("off")
                     axes[i, j].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
                 elif images.shape[1] > 1:
+                    if plot_names[i]:
+                        axes[0].text(-1, 0.5, plot_names[i],
+                                size=24, va="center", transform=axes[0].transAxes, color="white")
                     axes[j].axis("off")
                     axes[j].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
                 else:
+                    if plot_names[i]:
+                        axes[i].text(-1, 0.5, plot_names[i],
+                                size=24, va="center", transform=axes[i].transAxes, color="white")
                     axes[i].axis("off")
                     axes[i].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
         plt.subplots_adjust(wspace=0.01, hspace=0.01, left=0, right=1, bottom=0, top=1)
@@ -94,3 +101,13 @@ def generate_images(model, n_images, support_img=None):
     with torch.no_grad():
         output = model(noise)
     return output
+
+def get_class_from_name(gt_class):
+    if gt_class == 'nh':
+        return "Northern Hemisphere"
+    elif gt_class == 'sh':
+        return "Southern Hemisphere"
+    elif gt_class == 'ne':
+        return "No Eruption"
+    else:
+        return "Tropics"
