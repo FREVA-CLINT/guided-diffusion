@@ -115,6 +115,7 @@ def set_common_args():
     arg_parser.add_argument('--attention-res', type=int_list, default="16,8",
                             help="Resolutions of current tensors where attention layers should apply")
     arg_parser.add_argument('--freva-project', type=str, default=None, help="Read data via freva project")
+    arg_parser.add_argument('--freva-realm', type=str, default=None, help="Read data via freva project")
     arg_parser.add_argument('--freva-model', type=str, default=None, help="Read data via freva model")
     arg_parser.add_argument('--freva-experiment', type=str, default=None, help="Read data via freva experiment")
     arg_parser.add_argument('--freva-time-frequency', type=str, default=None, help="Read data via freva time-frequency")
