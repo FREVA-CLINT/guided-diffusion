@@ -35,7 +35,7 @@ def plot_snapshot_images(gt_img, model, diffusion, filename, cond):
                            clip_denoised=True,
                            model_kwargs=model_kwargs,
                            )
-        classes = torch.cat([classes, torch.tensor([cond["y"][0]])])
+        classes = torch.cat([classes, torch.tensor([cond["y"][0]]).to(cfg.device)])
         plot_names = ["{} ssi{}".format(get_class_from_name([k for k, v in cfg.classes.items() if c == v][0][0]), [k for k, v in cfg.classes.items() if c == v][0][1]) for c in classes]
     output = output.unsqueeze(1).to(cfg.device)
     gt_img = gt_img.unsqueeze(0)
@@ -104,10 +104,10 @@ def generate_images(model, n_images, support_img=None):
 
 def get_class_from_name(gt_class):
     if gt_class == 'nh':
-        return "Northern Hemisphere"
+        return "NH"
     elif gt_class == 'sh':
-        return "Southern Hemisphere"
+        return "SH"
     elif gt_class == 'ne':
-        return "No Eruption"
+        return "No Eru"
     else:
-        return "Tropics"
+        return "Trop"
