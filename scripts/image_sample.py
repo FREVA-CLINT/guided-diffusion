@@ -161,7 +161,7 @@ def main(arg_file=None):
             diff_gan_images = torch.sub(gan_ensemble_mean.unsqueeze(0), samples_by_timestep)
             plot_images(diff_gan_images, 'diff_gan_images', cfg.sample_names, cfg.eval_dir)
             diff_ensembles = torch.sub(gt_ensemble_mean.unsqueeze(0), gt_images)
-            plot_images(diff_ensembles, 'diff_ensembles', cfg.gt_ensembles, cfg.eval_dir)
+            plot_images(diff_ensembles[:diff_gan_images.shape[0]], 'diff_ensembles', cfg.gt_ensembles, cfg.eval_dir)
 
     dist.barrier()
     logger.log("sampling complete")

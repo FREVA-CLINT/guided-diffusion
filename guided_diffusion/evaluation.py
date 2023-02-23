@@ -50,7 +50,7 @@ def plot_images(images, filename, plot_names, directory):
     images = images.to(torch.device('cpu'))
     fig, axes = plt.subplots(nrows=images.shape[0], ncols=images.shape[1],
                              figsize=(images.shape[4] / 50 * images.shape[1], images.shape[3] * images.shape[0] / 50))
-    font_size = images.shape[0] * 6
+    font_size = 24
 
     # plot and save data
     fig.patch.set_facecolor('black')
