@@ -173,5 +173,7 @@ def set_evaluate_args(arg_file=None, prog_func=None):
                             help="Comma separated list of classes for location prediction")
     arg_parser.add_argument('--sample-time-chunks', type=interv_list, default=None,
                             help="Comma separated list of classes for location prediction")
+    arg_parser.add_argument('--create-output-files', action='store_true', help="Use multiple GPUs, if any")
+    arg_parser.add_argument('--create-eval-images', action='store_true', help="Use multiple GPUs, if any")
 
     global_args(arg_parser, arg_file, prog_func)

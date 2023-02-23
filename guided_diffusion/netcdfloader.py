@@ -130,7 +130,7 @@ class FrevaNetCDFLoader(Dataset):
         return normalizer.normalize(image, ind_data)
 
     def __getitem__(self, index=None, ensemble=None, timechunk=None):
-        if ensemble and timechunk:
+        if ensemble is not None and timechunk is not None:
             ensemble_index = cfg.gt_ensembles.index(ensemble)
             index = ensemble_index * self.time_chunks + timechunk
 

@@ -43,13 +43,14 @@ def plot_snapshot_images(gt_img, model, diffusion, filename, cond):
         output = torch.transpose(output, 1, 2)
         gt_img = torch.transpose(gt_img, 0, 1)
     output = torch.cat([output.to(cfg.device), gt_img.to(cfg.device).unsqueeze(0)], dim=0)
-    plot_images(output, filename, plot_names)
+    plot_images(output, filename, plot_names, cfg.snapshot_dir)
 
 
-def plot_images(images, filename, plot_names):
+def plot_images(images, filename, plot_names, directory):
     images = images.to(torch.device('cpu'))
     fig, axes = plt.subplots(nrows=images.shape[0], ncols=images.shape[1],
                              figsize=(images.shape[4] / 50 * images.shape[1], images.shape[3] * images.shape[0] / 50))
+    font_size = images.shape[0] * 6
 
     # plot and save data
     fig.patch.set_facecolor('black')
@@ -68,23 +69,23 @@ def plot_images(images, filename, plot_names):
                 if images.shape[0] > 1 and images.shape[1] > 1:
                     if plot_names[i]:
                         axes[i, 0].text(-1, 0.5, plot_names[i],
-                                size=24, va="center", transform=axes[i, 0].transAxes, color="white")
+                                size=font_size, va="center", transform=axes[i, 0].transAxes, color="white")
                     axes[i, j].axis("off")
                     axes[i, j].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
                 elif images.shape[1] > 1:
                     if plot_names[i]:
                         axes[0].text(-1, 0.5, plot_names[i],
-                                size=24, va="center", transform=axes[0].transAxes, color="white")
+                                size=font_size, va="center", transform=axes[0].transAxes, color="white")
                     axes[j].axis("off")
                     axes[j].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
                 else:
                     if plot_names[i]:
                         axes[i].text(-1, 0.5, plot_names[i],
-                                size=24, va="center", transform=axes[i].transAxes, color="white")
+                                size=font_size, va="center", transform=axes[i].transAxes, color="white")
                     axes[i].axis("off")
                     axes[i].imshow(np.squeeze(images[i, j, c, :, :]), vmin=vmin, vmax=vmax)
         plt.subplots_adjust(wspace=0.01, hspace=0.01, left=0, right=1, bottom=0, top=1)
-        plt.savefig('{}/images/{}_{}.jpg'.format(cfg.snapshot_dir, filename, c), bbox_inches='tight')
+        plt.savefig('{}/images/{}_{}.jpg'.format(directory, filename, cfg.data_types[c]), bbox_inches='tight')
 
     plt.clf()
     plt.close('all')

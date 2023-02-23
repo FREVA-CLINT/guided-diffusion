@@ -13,6 +13,7 @@ import xarray as xr
 
 from guided_diffusion import config as cfg
 from guided_diffusion import dist_util, logger
+from guided_diffusion.evaluation import plot_images
 from guided_diffusion.netcdfloader import EVANetCDFLoader, FrevaNetCDFLoader
 from guided_diffusion.script_util import (
     model_and_diffusion_defaults,
@@ -110,22 +111,57 @@ def main(arg_file=None):
             all_sample_names.append(sample_names)
             all_samples.append(samples)
         else:
-            support_image = [dataset.__getitem__(ensemble=cfg.val_ensemble, timechunk=t)[1].to(cfg.device) for t in
+            support_image = [dataset.__getitem__(ensemble=cfg.gt_ensembles[0], timechunk=t)[1].to(cfg.device).repeat(cfg.batch_size, 1, 1, 1) for t in
                              cfg.sample_time_chunks]
-            support_image = torch.stack(support_image)
+            support_image = torch.cat(support_image)
 
             samples = sample_fn(
                 model, support_image,
-                (cfg.batch_size, in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
+                (cfg.batch_size * len(cfg.sample_time_chunks), in_out_channels, cfg.img_sizes[0], cfg.img_sizes[1]),
                 clip_denoised=True,
                 model_kwargs={},
             )
             all_samples.append(samples)
 
-    for i in range(len(all_samples)):
-        for j in range(len(all_samples[i])):
-            sample = torch.stack(torch.split(all_samples[i][j], cfg.split_timesteps, dim=0), dim=0)
-            create_outputs(sample, dataset, all_sample_names[i][j], dataset.xr_dss)
+    if cfg.create_output_files:
+        for i in range(len(all_samples)):
+            for j in range(len(all_samples[i])):
+                sample = torch.stack(torch.split(all_samples[i][j], cfg.split_timesteps, dim=0), dim=0)
+                create_outputs(sample, dataset, all_sample_names[i][j], dataset.xr_dss)
+
+    if cfg.create_eval_images:
+        if not os.path.exists('{}/images'.format(cfg.eval_dir)):
+            os.makedirs('{}/images'.format(cfg.eval_dir))
+        for t in cfg.sample_time_chunks:
+            assert t < dataset.time_chunks
+            support_image = dataset.__getitem__(ensemble=cfg.gt_ensembles[0], timechunk=t)[1].to(cfg.device)
+            samples_by_timestep = torch.cat([sample[t*cfg.batch_size:(t+1)*cfg.batch_size, :, :, :] for sample in all_samples])
+            gt_images = torch.stack([dataset.__getitem__(ensemble=ens, timechunk=t)[0] for ens in cfg.gt_ensembles]
+                                    ).to(cfg.device)
+
+            samples_by_timestep = torch.stack(torch.split(samples_by_timestep, cfg.split_timesteps, dim=1), dim=2)
+            gt_images = torch.stack(torch.split(gt_images, cfg.split_timesteps, dim=1), dim=2)
+            support_image = torch.stack(torch.split(support_image, cfg.split_timesteps, dim=0), dim=1)
+
+            # mean over ensemble
+            gan_ensemble_mean = torch.mean(samples_by_timestep, dim=0)
+            gt_ensemble_mean = torch.mean(gt_images, dim=0)
+            mean_over_ens = torch.stack([gan_ensemble_mean, gt_ensemble_mean], dim=0)
+            plot_images(mean_over_ens, 'mean_over_ens', ["Mean Pred", "Mean GT"], cfg.eval_dir)
+
+            # mean over ensemble and time
+            mean_over_ens_and_time = torch.mean(mean_over_ens, dim=1).unsqueeze(1)
+            plot_images(mean_over_ens_and_time, 'mean_over_ens_and_time', ["Mean Pred", "Mean GT"], cfg.eval_dir)
+
+            # difference support
+            diff_support = torch.sub(support_image.unsqueeze(0), samples_by_timestep)
+            plot_images(diff_support, 'diff_support', cfg.sample_names, cfg.eval_dir)
+
+            # difference between generated images
+            diff_gan_images = torch.sub(gan_ensemble_mean.unsqueeze(0), samples_by_timestep)
+            plot_images(diff_gan_images, 'diff_gan_images', cfg.sample_names, cfg.eval_dir)
+            diff_ensembles = torch.sub(gt_ensemble_mean.unsqueeze(0), gt_images)
+            plot_images(diff_ensembles, 'diff_ensembles', cfg.gt_ensembles, cfg.eval_dir)
 
     dist.barrier()
     logger.log("sampling complete")
