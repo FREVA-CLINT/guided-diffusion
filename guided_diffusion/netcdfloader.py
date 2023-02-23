@@ -51,8 +51,8 @@ def nc_loadchecker(filename, data_type, keep_dss=False):
     try:
         # We use load_dataset instead of open_dataset because of lazy transpose
         ds = xr.load_dataset(filename, decode_times=True)
-        if ('r0' in basename or 'r1' in basename) and 'i1850p3' in basename:
-            ds[data_type].values = np.flip(ds[data_type].values, axis=1)
+        #if ('r0' in basename or 'r1' in basename) and 'i1850p3' in basename:
+        #    ds[data_type].values = np.flip(ds[data_type].values, axis=1)
 
     except Exception:
         raise ValueError('Impossible to read {}.'
@@ -89,7 +89,7 @@ def load_netcdf(data_paths, data_types, keep_dss=False):
 
 
 class FrevaNetCDFLoader(Dataset):
-    def __init__(self, project, model, experiment, time_frequency, data_types, gt_ensembles, support_ensemble,
+    def __init__(self, project, model, experiment, time_frequency, realm, data_types, gt_ensembles, support_ensemble,
                  split_timesteps=0, mode='train'):
         super(FrevaNetCDFLoader, self).__init__()
 
@@ -104,7 +104,7 @@ class FrevaNetCDFLoader(Dataset):
             ensemble_data = []
             for ensemble in gt_ensembles + [support_ensemble]:
                 paths = load_paths(project=project, model=model, experiment=experiment, time_frequency=time_frequency,
-                                   variable=type, ensemble=ensemble)
+                                   variable=type, ensemble=ensemble, realm=realm)
                 paths = list(paths)
                 if ensemble == support_ensemble and self.xr_dss is None:
                     self.xr_dss, data, _ = load_netcdf(paths, len(paths) * [type], keep_dss=True)

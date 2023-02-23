@@ -73,7 +73,7 @@ def main(arg_file=None):
     else:
         dataset = FrevaNetCDFLoader(project=cfg.freva_project, model=cfg.freva_model,
                                     experiment=cfg.freva_experiment, time_frequency=cfg.freva_time_frequency,
-                                    data_types=cfg.data_types, gt_ensembles=cfg.gt_ensembles,
+                                    data_types=cfg.data_types, gt_ensembles=cfg.gt_ensembles, realm=cfg.freva_realm,
                                     support_ensemble=cfg.val_ensemble,
                                     split_timesteps=cfg.split_timesteps)
 
