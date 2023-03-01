@@ -107,7 +107,7 @@ def main(arg_file=None):
                                       location != 'ne' and ssi != 0.0)]
             sample_names = []
             for ensemble in cfg.sample_names[len(all_samples)*cfg.batch_size:len(all_samples)*cfg.batch_size+cfg.batch_size]:
-                sample_names += ['deva{}ssi{}{}_echam6_BOT_mm_'.format(sample_class[0], sample_class[1], ensemble) for sample_class in sample_classes]
+                sample_names += ['deva{}ssi{}{}_echam6_BOT_mm_'.format(int(sample_class[1]) if sample_class[1] % 2 == 0 else sample_class[1], sample_class[0] if sample_class[0] != "ne" else "", ensemble) for sample_class in sample_classes]
             all_sample_names.append(sample_names)
             all_samples.append(samples)
         else:
